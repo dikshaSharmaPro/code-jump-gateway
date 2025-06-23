@@ -1,127 +1,196 @@
 
 export interface ScanData {
   id: string;
-  timestamp: Date;
+  timestamp: number;
+  userAgent: string;
+  device: {
+    type: 'mobile' | 'tablet' | 'desktop';
+    os: 'ios' | 'android' | 'windows' | 'mac' | 'linux' | 'unknown';
+    browser: string;
+  };
   location?: {
     country?: string;
     city?: string;
     latitude?: number;
     longitude?: number;
   };
-  device: {
-    type: 'mobile' | 'tablet' | 'desktop';
-    os: 'ios' | 'android' | 'windows' | 'mac' | 'linux' | 'unknown';
-    browser?: string;
-  };
-  userAgent: string;
   isRepeatUser: boolean;
   redirectedTo: 'ios' | 'android' | 'fallback';
 }
 
-export const trackScan = async (redirectUrl: string): Promise<ScanData> => {
+const STORAGE_KEY = 'qr_scan_analytics';
+const USER_TRACKING_KEY = 'qr_user_tracking';
+
+const detectDeviceInfo = () => {
   const userAgent = navigator.userAgent;
-  const timestamp = new Date();
-  
-  // Device detection
-  const getDeviceType = (): 'mobile' | 'tablet' | 'desktop' => {
-    if (/tablet|ipad/i.test(userAgent)) return 'tablet';
-    if (/mobile|phone/i.test(userAgent)) return 'mobile';
-    return 'desktop';
-  };
+  let deviceType: 'mobile' | 'tablet' | 'desktop' = 'desktop';
+  let os: 'ios' | 'android' | 'windows' | 'mac' | 'linux' | 'unknown' = 'unknown';
+  let browser = 'Unknown';
 
-  const getOS = (): 'ios' | 'android' | 'windows' | 'mac' | 'linux' | 'unknown' => {
-    if (/iPad|iPhone|iPod/.test(userAgent)) return 'ios';
-    if (/android/i.test(userAgent)) return 'android';
-    if (/windows/i.test(userAgent)) return 'windows';
-    if (/macintosh|mac os x/i.test(userAgent)) return 'mac';
-    if (/linux/i.test(userAgent)) return 'linux';
-    return 'unknown';
-  };
+  // Device type detection
+  if (/iPad/.test(userAgent)) {
+    deviceType = 'tablet';
+  } else if (/Mobile|iP(hone|od)|Android|BlackBerry|IEMobile|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(userAgent)) {
+    deviceType = 'mobile';
+  }
 
-  const getBrowser = (): string => {
-    if (userAgent.includes('Chrome')) return 'Chrome';
-    if (userAgent.includes('Firefox')) return 'Firefox';
-    if (userAgent.includes('Safari')) return 'Safari';
-    if (userAgent.includes('Edge')) return 'Edge';
-    return 'Unknown';
-  };
+  // OS detection
+  if (/iPad|iPhone|iPod/.test(userAgent)) {
+    os = 'ios';
+  } else if (/android/i.test(userAgent)) {
+    os = 'android';
+  } else if (/Win/.test(userAgent)) {
+    os = 'windows';
+  } else if (/Mac/.test(userAgent)) {
+    os = 'mac';
+  } else if (/Linux/.test(userAgent)) {
+    os = 'linux';
+  }
 
-  // Check if repeat user
-  const userId = localStorage.getItem('qr_user_id') || `user_${Date.now()}_${Math.random()}`;
-  const isRepeatUser = localStorage.getItem('qr_user_id') !== null;
-  localStorage.setItem('qr_user_id', userId);
+  // Browser detection
+  if (userAgent.includes('Chrome')) {
+    browser = 'Chrome';
+  } else if (userAgent.includes('Safari')) {
+    browser = 'Safari';
+  } else if (userAgent.includes('Firefox')) {
+    browser = 'Firefox';
+  } else if (userAgent.includes('Edge')) {
+    browser = 'Edge';
+  }
 
-  const scanData: ScanData = {
-    id: `scan_${Date.now()}_${Math.random()}`,
-    timestamp,
-    device: {
-      type: getDeviceType(),
-      os: getOS(),
-      browser: getBrowser(),
-    },
-    userAgent,
-    isRepeatUser,
-    redirectedTo: getOS() === 'ios' ? 'ios' : getOS() === 'android' ? 'android' : 'fallback',
-  };
+  return { deviceType, os, browser };
+};
 
-  // Try to get location (with user permission)
+const determineRedirectDestination = (): 'ios' | 'android' | 'fallback' => {
+  const userAgent = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(userAgent)) {
+    return 'ios';
+  } else if (/android/i.test(userAgent)) {
+    return 'android';
+  }
+  return 'fallback';
+};
+
+const checkIfRepeatUser = (): boolean => {
+  const existingUser = localStorage.getItem(USER_TRACKING_KEY);
+  if (!existingUser) {
+    // Generate a unique user ID and store it
+    const userId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem(USER_TRACKING_KEY, userId);
+    return false;
+  }
+  return true;
+};
+
+const getLocationInfo = async (): Promise<ScanData['location']> => {
   try {
+    // Try to get location from browser geolocation API
     if (navigator.geolocation) {
-      await new Promise((resolve) => {
+      return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            scanData.location = {
+            resolve({
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
-            };
-            resolve(position);
+            });
           },
-          () => resolve(null),
+          () => {
+            // If geolocation fails, try IP-based location (simplified)
+            resolve(undefined);
+          },
           { timeout: 5000 }
         );
       });
     }
   } catch (error) {
-    console.log('Location access denied or unavailable');
+    console.log('Location detection failed:', error);
   }
+  return undefined;
+};
 
-  // Store scan data locally
-  const existingScans = JSON.parse(localStorage.getItem('qr_scan_data') || '[]');
-  existingScans.push(scanData);
-  localStorage.setItem('qr_scan_data', JSON.stringify(existingScans));
+export const trackScan = async (): Promise<void> => {
+  try {
+    const deviceInfo = detectDeviceInfo();
+    const location = await getLocationInfo();
+    const isRepeatUser = checkIfRepeatUser();
+    const redirectedTo = determineRedirectDestination();
 
-  console.log('Scan tracked:', scanData);
-  return scanData;
+    const scanData: ScanData = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      timestamp: Date.now(),
+      userAgent: navigator.userAgent,
+      device: {
+        type: deviceInfo.deviceType,
+        os: deviceInfo.os,
+        browser: deviceInfo.browser,
+      },
+      location,
+      isRepeatUser,
+      redirectedTo,
+    };
+
+    // Store scan data
+    const existingData = getScanAnalytics();
+    const updatedData = [scanData, ...existingData].slice(0, 1000); // Keep last 1000 scans
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedData));
+
+    console.log('Scan tracked:', scanData);
+  } catch (error) {
+    console.error('Failed to track scan:', error);
+  }
 };
 
 export const getScanAnalytics = (): ScanData[] => {
-  return JSON.parse(localStorage.getItem('qr_scan_data') || '[]');
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Failed to retrieve analytics:', error);
+    return [];
+  }
 };
 
-export const exportAnalyticsCSV = (scans: ScanData[]): string => {
-  if (scans.length === 0) return '';
+export const exportAnalyticsCSV = (scans: ScanData[]): string | null => {
+  if (scans.length === 0) return null;
 
   const headers = [
+    'ID',
     'Timestamp',
+    'Date',
+    'Time',
     'Device Type',
-    'Operating System',
+    'OS',
     'Browser',
-    'Location',
+    'Location (Lat)',
+    'Location (Long)',
     'Repeat User',
     'Redirected To',
     'User Agent'
   ];
 
   const rows = scans.map(scan => [
-    scan.timestamp.toISOString(),
+    scan.id,
+    scan.timestamp,
+    new Date(scan.timestamp).toLocaleDateString(),
+    new Date(scan.timestamp).toLocaleTimeString(),
     scan.device.type,
     scan.device.os,
-    scan.device.browser || 'Unknown',
-    scan.location ? `${scan.location.latitude}, ${scan.location.longitude}` : 'Unknown',
+    scan.device.browser,
+    scan.location?.latitude || '',
+    scan.location?.longitude || '',
     scan.isRepeatUser ? 'Yes' : 'No',
     scan.redirectedTo,
-    `"${scan.userAgent}"`
+    `"${scan.userAgent.replace(/"/g, '""')}"` // Escape quotes in user agent
   ]);
 
-  return [headers, ...rows].map(row => row.join(',')).join('\n');
+  const csvContent = [headers, ...rows]
+    .map(row => row.join(','))
+    .join('\n');
+
+  return csvContent;
+};
+
+export const clearAnalytics = (): void => {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(USER_TRACKING_KEY);
 };

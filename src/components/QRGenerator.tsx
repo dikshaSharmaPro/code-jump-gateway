@@ -2,14 +2,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Download, Copy, Eye, Upload, X } from 'lucide-react';
+import { Upload, X, Eye, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import QRDesignSelector from './QRDesignSelector';
+import BrandedUrlGenerator from './BrandedUrlGenerator';
+import DownloadOptions from './DownloadOptions';
+import { Button } from '@/components/ui/button';
 
 interface QRGeneratorProps {
   onQRGenerated: (url: string) => void;
@@ -29,7 +32,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
     margin: 4,
     width: 256,
     dotStyle: 'square' as 'square' | 'dots' | 'rounded',
-    cornerStyle: 'square' as 'square' | 'dot' | 'rounded',
     logoSize: 20
   });
   
@@ -49,15 +51,13 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
 
   const applyCustomStyles = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    const moduleSize = canvas.width / 25; // Approximate module size
+    const moduleSize = canvas.width / 25;
 
-    // Apply dot style customization
     if (customization.dotStyle === 'dots') {
       for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
         for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
           const idx = (y * canvas.width + x) * 4;
-          if (data[idx] === 0) { // Black pixel
+          if (imageData.data[idx] === 0) {
             ctx.fillStyle = customization.foregroundColor;
             ctx.beginPath();
             ctx.arc(x + moduleSize/2, y + moduleSize/2, moduleSize/3, 0, 2 * Math.PI);
@@ -69,7 +69,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
       for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
         for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
           const idx = (y * canvas.width + x) * 4;
-          if (data[idx] === 0) { // Black pixel
+          if (imageData.data[idx] === 0) {
             ctx.fillStyle = customization.foregroundColor;
             ctx.beginPath();
             ctx.roundRect(x, y, moduleSize * 0.8, moduleSize * 0.8, moduleSize * 0.2);
@@ -93,11 +93,8 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
         const x = (canvas.width - logoSize) / 2;
         const y = (canvas.height - logoSize) / 2;
 
-        // Add white background for logo
         ctx.fillStyle = 'white';
         ctx.fillRect(x - 8, y - 8, logoSize + 16, logoSize + 16);
-
-        // Draw logo
         ctx.drawImage(logo, x, y, logoSize, logoSize);
         resolve();
       };
@@ -125,13 +122,11 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
 
         const ctx = canvas.getContext('2d');
         if (ctx && customization.dotStyle !== 'square') {
-          // Clear canvas and redraw with custom styles
           ctx.fillStyle = customization.backgroundColor;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           applyCustomStyles(ctx, canvas);
         }
 
-        // Add logo if available
         if (logoDataUrl) {
           await addLogoToQR(canvas);
         }
@@ -153,7 +148,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+      if (file.size > 2 * 1024 * 1024) {
         toast({
           title: "File too large",
           description: "Please select an image smaller than 2MB.",
@@ -184,24 +179,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
     }
   };
 
-  useEffect(() => {
-    generateQRCode();
-  }, [appStoreUrl, playStoreUrl, fallbackUrl, customization, logoDataUrl]);
-
-  const downloadQRCode = () => {
-    if (qrCodeUrl) {
-      const link = document.createElement('a');
-      link.download = 'universal-qr-code.png';
-      link.href = qrCodeUrl;
-      link.click();
-      
-      toast({
-        title: "Success",
-        description: "QR code downloaded successfully!",
-      });
-    }
-  };
-
   const copyRedirectUrl = async () => {
     try {
       await navigator.clipboard.writeText(generateRedirectUrl());
@@ -218,269 +195,254 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
     }
   };
 
+  useEffect(() => {
+    generateQRCode();
+  }, [appStoreUrl, playStoreUrl, fallbackUrl, customization, logoDataUrl]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
       {/* Configuration Panel */}
-      <Card className="h-fit">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5" />
-            QR Code Configuration
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* App Store URLs */}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="ios-url">iOS App Store URL</Label>
-              <Input
-                id="ios-url"
-                value={appStoreUrl}
-                onChange={(e) => setAppStoreUrl(e.target.value)}
-                placeholder="https://apps.apple.com/app/your-app"
-                className="mt-1"
-              />
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              QR Code Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* App Store URLs */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="ios-url">iOS App Store URL</Label>
+                <Input
+                  id="ios-url"
+                  value={appStoreUrl}
+                  onChange={(e) => setAppStoreUrl(e.target.value)}
+                  placeholder="https://apps.apple.com/app/your-app"
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="android-url">Google Play Store URL</Label>
+                <Input
+                  id="android-url"
+                  value={playStoreUrl}
+                  onChange={(e) => setPlayStoreUrl(e.target.value)}
+                  placeholder="https://play.google.com/store/apps/details?id=your.app"
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="fallback-url">Fallback URL</Label>
+                <Input
+                  id="fallback-url"
+                  value={fallbackUrl}
+                  onChange={(e) => setFallbackUrl(e.target.value)}
+                  placeholder="https://yourwebsite.com"
+                  className="mt-1"
+                />
+              </div>
             </div>
-            
-            <div>
-              <Label htmlFor="android-url">Google Play Store URL</Label>
-              <Input
-                id="android-url"
-                value={playStoreUrl}
-                onChange={(e) => setPlayStoreUrl(e.target.value)}
-                placeholder="https://play.google.com/store/apps/details?id=your.app"
-                className="mt-1"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="fallback-url">Fallback URL</Label>
-              <Input
-                id="fallback-url"
-                value={fallbackUrl}
-                onChange={(e) => setFallbackUrl(e.target.value)}
-                placeholder="https://yourwebsite.com"
-                className="mt-1"
-              />
-            </div>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          {/* Logo Upload Section */}
-          <div className="space-y-4">
-            <h3 className="font-semibold">Logo</h3>
-            
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  Upload Logo
-                </Button>
-                {logoFile && (
+            {/* Logo Upload Section */}
+            <div className="space-y-4">
+              <h3 className="font-semibold">Logo</h3>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={removeLogo}
-                    className="text-red-500 hover:text-red-700"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2"
                   >
-                    <X className="h-4 w-4" />
+                    <Upload className="h-4 w-4" />
+                    Upload Logo
                   </Button>
+                  {logoFile && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={removeLogo}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+                
+                {logoFile && (
+                  <div className="text-sm text-muted-foreground">
+                    {logoFile.name}
+                  </div>
+                )}
+
+                {logoDataUrl && (
+                  <div>
+                    <Label>Logo Size: {customization.logoSize}%</Label>
+                    <Slider
+                      value={[customization.logoSize]}
+                      onValueChange={([value]) => setCustomization(prev => ({ ...prev, logoSize: value }))}
+                      max={30}
+                      min={10}
+                      step={2}
+                      className="mt-2"
+                    />
+                  </div>
                 )}
               </div>
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="hidden"
-              />
-              
-              {logoFile && (
-                <div className="text-sm text-muted-foreground">
-                  {logoFile.name}
-                </div>
-              )}
+            </div>
 
-              {logoDataUrl && (
+            <Separator />
+
+            {/* QR Design Selection */}
+            <QRDesignSelector
+              selectedStyle={customization.dotStyle}
+              onStyleChange={(style) => setCustomization(prev => ({ ...prev, dotStyle: style }))}
+            />
+
+            <Separator />
+
+            {/* Color Customization */}
+            <div className="space-y-4">
+              <h3 className="font-semibold">Colors</h3>
+              
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Logo Size: {customization.logoSize}%</Label>
-                  <Slider
-                    value={[customization.logoSize]}
-                    onValueChange={([value]) => setCustomization(prev => ({ ...prev, logoSize: value }))}
-                    max={30}
-                    min={10}
-                    step={2}
-                    className="mt-2"
-                  />
+                  <Label htmlFor="fg-color">Foreground Color</Label>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="color"
+                      id="fg-color"
+                      value={customization.foregroundColor}
+                      onChange={(e) => setCustomization(prev => ({ ...prev, foregroundColor: e.target.value }))}
+                      className="w-12 h-10 rounded border cursor-pointer"
+                    />
+                    <Input
+                      value={customization.foregroundColor}
+                      onChange={(e) => setCustomization(prev => ({ ...prev, foregroundColor: e.target.value }))}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Design Customization */}
-          <div className="space-y-4">
-            <h3 className="font-semibold">Design & Style</h3>
-            
-            <div>
-              <Label>Dot Style</Label>
-              <Select
-                value={customization.dotStyle}
-                onValueChange={(value: 'square' | 'dots' | 'rounded') => 
-                  setCustomization(prev => ({ ...prev, dotStyle: value }))
-                }
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="square">Square</SelectItem>
-                  <SelectItem value="dots">Dots</SelectItem>
-                  <SelectItem value="rounded">Rounded</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Corner Style</Label>
-              <Select
-                value={customization.cornerStyle}
-                onValueChange={(value: 'square' | 'dot' | 'rounded') => 
-                  setCustomization(prev => ({ ...prev, cornerStyle: value }))
-                }
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="square">Square</SelectItem>
-                  <SelectItem value="dot">Dot</SelectItem>
-                  <SelectItem value="rounded">Rounded</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="fg-color">Foreground Color</Label>
-                <div className="flex gap-2 mt-1">
-                  <input
-                    type="color"
-                    id="fg-color"
-                    value={customization.foregroundColor}
-                    onChange={(e) => setCustomization(prev => ({ ...prev, foregroundColor: e.target.value }))}
-                    className="w-12 h-10 rounded border cursor-pointer"
-                  />
-                  <Input
-                    value={customization.foregroundColor}
-                    onChange={(e) => setCustomization(prev => ({ ...prev, foregroundColor: e.target.value }))}
-                    className="flex-1"
-                  />
+                
+                <div>
+                  <Label htmlFor="bg-color">Background Color</Label>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="color"
+                      id="bg-color"
+                      value={customization.backgroundColor}
+                      onChange={(e) => setCustomization(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                      className="w-12 h-10 rounded border cursor-pointer"
+                    />
+                    <Input
+                      value={customization.backgroundColor}
+                      onChange={(e) => setCustomization(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
               </div>
+            </div>
+
+            <Separator />
+
+            {/* Advanced Settings */}
+            <div className="space-y-4">
+              <h3 className="font-semibold">Advanced Settings</h3>
               
               <div>
-                <Label htmlFor="bg-color">Background Color</Label>
-                <div className="flex gap-2 mt-1">
-                  <input
-                    type="color"
-                    id="bg-color"
-                    value={customization.backgroundColor}
-                    onChange={(e) => setCustomization(prev => ({ ...prev, backgroundColor: e.target.value }))}
-                    className="w-12 h-10 rounded border cursor-pointer"
-                  />
-                  <Input
-                    value={customization.backgroundColor}
-                    onChange={(e) => setCustomization(prev => ({ ...prev, backgroundColor: e.target.value }))}
-                    className="flex-1"
-                  />
-                </div>
+                <Label>Error Correction Level</Label>
+                <Select
+                  value={customization.errorCorrectionLevel}
+                  onValueChange={(value: 'L' | 'M' | 'Q' | 'H') => 
+                    setCustomization(prev => ({ ...prev, errorCorrectionLevel: value }))
+                  }
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="L">Low (7%)</SelectItem>
+                    <SelectItem value="M">Medium (15%)</SelectItem>
+                    <SelectItem value="Q">Quartile (25%)</SelectItem>
+                    <SelectItem value="H">High (30%)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Margin: {customization.margin}px</Label>
+                <Slider
+                  value={[customization.margin]}
+                  onValueChange={([value]) => setCustomization(prev => ({ ...prev, margin: value }))}
+                  max={10}
+                  min={0}
+                  step={1}
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label>Size: {customization.width}px</Label>
+                <Slider
+                  value={[customization.width]}
+                  onValueChange={([value]) => setCustomization(prev => ({ ...prev, width: value }))}
+                  max={512}
+                  min={128}
+                  step={32}
+                  className="mt-2"
+                />
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div>
-              <Label>Error Correction Level</Label>
-              <Select
-                value={customization.errorCorrectionLevel}
-                onValueChange={(value: 'L' | 'M' | 'Q' | 'H') => 
-                  setCustomization(prev => ({ ...prev, errorCorrectionLevel: value }))
-                }
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="L">Low (7%)</SelectItem>
-                  <SelectItem value="M">Medium (15%)</SelectItem>
-                  <SelectItem value="Q">Quartile (25%)</SelectItem>
-                  <SelectItem value="H">High (30%)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Margin: {customization.margin}px</Label>
-              <Slider
-                value={[customization.margin]}
-                onValueChange={([value]) => setCustomization(prev => ({ ...prev, margin: value }))}
-                max={10}
-                min={0}
-                step={1}
-                className="mt-2"
-              />
-            </div>
-
-            <div>
-              <Label>Size: {customization.width}px</Label>
-              <Slider
-                value={[customization.width]}
-                onValueChange={([value]) => setCustomization(prev => ({ ...prev, width: value }))}
-                max={512}
-                min={128}
-                step={32}
-                className="mt-2"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Branded URL Generator */}
+        <BrandedUrlGenerator originalUrl={generateRedirectUrl()} />
+      </div>
 
       {/* QR Code Preview */}
-      <Card className="h-fit">
-        <CardHeader>
-          <CardTitle>QR Code Preview</CardTitle>
-        </CardHeader>
-        <CardContent className="text-center space-y-4">
-          <div className="flex justify-center p-8 bg-gray-50 rounded-lg">
-            <canvas
-              ref={canvasRef}
-              className="max-w-full h-auto border rounded shadow-sm"
-            />
-          </div>
-          
-          <div className="flex gap-2 justify-center">
-            <Button onClick={downloadQRCode} className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Download
-            </Button>
-            <Button variant="outline" onClick={copyRedirectUrl} className="flex items-center gap-2">
-              <Copy className="h-4 w-4" />
-              Copy URL
-            </Button>
-          </div>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>QR Code Preview</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <div className="flex justify-center p-8 bg-gray-50 rounded-lg">
+              <canvas
+                ref={canvasRef}
+                className="max-w-full h-auto border rounded shadow-sm"
+              />
+            </div>
+            
+            <div className="flex gap-2 justify-center flex-wrap">
+              <DownloadOptions qrCodeUrl={qrCodeUrl} canvasRef={canvasRef} />
+              <Button variant="outline" onClick={copyRedirectUrl} className="flex items-center gap-2">
+                <Copy className="h-4 w-4" />
+                Copy URL
+              </Button>
+            </div>
 
-          <div className="text-sm text-muted-foreground">
-            Scan this QR code to test the redirect functionality
-          </div>
-        </CardContent>
-      </Card>
+            <div className="text-sm text-muted-foreground">
+              Scan this QR code to test the redirect functionality
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
