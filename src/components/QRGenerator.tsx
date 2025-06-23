@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Download, Copy, Eye } from 'lucide-react';
+import { Download, Copy, Eye, Upload, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface QRGeneratorProps {
@@ -20,15 +20,21 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
   const [playStoreUrl, setPlayStoreUrl] = useState('https://play.google.com/store/apps/details?id=your.app');
   const [fallbackUrl, setFallbackUrl] = useState('https://yourwebsite.com');
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoDataUrl, setLogoDataUrl] = useState<string>('');
   const [customization, setCustomization] = useState({
     foregroundColor: '#000000',
     backgroundColor: '#ffffff',
     errorCorrectionLevel: 'M' as 'L' | 'M' | 'Q' | 'H',
     margin: 4,
-    width: 256
+    width: 256,
+    dotStyle: 'square' as 'square' | 'dots' | 'rounded',
+    cornerStyle: 'square' as 'square' | 'dot' | 'rounded',
+    logoSize: 20
   });
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const generateRedirectUrl = () => {
@@ -39,6 +45,64 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
       fallback: fallbackUrl
     });
     return `${baseUrl}/redirect?${params.toString()}`;
+  };
+
+  const applyCustomStyles = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const moduleSize = canvas.width / 25; // Approximate module size
+
+    // Apply dot style customization
+    if (customization.dotStyle === 'dots') {
+      for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
+        for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
+          const idx = (y * canvas.width + x) * 4;
+          if (data[idx] === 0) { // Black pixel
+            ctx.fillStyle = customization.foregroundColor;
+            ctx.beginPath();
+            ctx.arc(x + moduleSize/2, y + moduleSize/2, moduleSize/3, 0, 2 * Math.PI);
+            ctx.fill();
+          }
+        }
+      }
+    } else if (customization.dotStyle === 'rounded') {
+      for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
+        for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
+          const idx = (y * canvas.width + x) * 4;
+          if (data[idx] === 0) { // Black pixel
+            ctx.fillStyle = customization.foregroundColor;
+            ctx.beginPath();
+            ctx.roundRect(x, y, moduleSize * 0.8, moduleSize * 0.8, moduleSize * 0.2);
+            ctx.fill();
+          }
+        }
+      }
+    }
+  };
+
+  const addLogoToQR = async (canvas: HTMLCanvasElement) => {
+    if (!logoDataUrl) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    return new Promise<void>((resolve) => {
+      const logo = new Image();
+      logo.onload = () => {
+        const logoSize = (canvas.width * customization.logoSize) / 100;
+        const x = (canvas.width - logoSize) / 2;
+        const y = (canvas.height - logoSize) / 2;
+
+        // Add white background for logo
+        ctx.fillStyle = 'white';
+        ctx.fillRect(x - 8, y - 8, logoSize + 16, logoSize + 16);
+
+        // Draw logo
+        ctx.drawImage(logo, x, y, logoSize, logoSize);
+        resolve();
+      };
+      logo.src = logoDataUrl;
+    });
   };
 
   const generateQRCode = async () => {
@@ -58,6 +122,19 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
           },
           width: customization.width,
         });
+
+        const ctx = canvas.getContext('2d');
+        if (ctx && customization.dotStyle !== 'square') {
+          // Clear canvas and redraw with custom styles
+          ctx.fillStyle = customization.backgroundColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          applyCustomStyles(ctx, canvas);
+        }
+
+        // Add logo if available
+        if (logoDataUrl) {
+          await addLogoToQR(canvas);
+        }
         
         const dataUrl = canvas.toDataURL();
         setQrCodeUrl(dataUrl);
@@ -73,9 +150,43 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
     }
   };
 
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        toast({
+          title: "File too large",
+          description: "Please select an image smaller than 2MB.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setLogoDataUrl(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      toast({
+        title: "Logo uploaded",
+        description: "Your logo has been added to the QR code.",
+      });
+    }
+  };
+
+  const removeLogo = () => {
+    setLogoFile(null);
+    setLogoDataUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   useEffect(() => {
     generateQRCode();
-  }, [appStoreUrl, playStoreUrl, fallbackUrl, customization]);
+  }, [appStoreUrl, playStoreUrl, fallbackUrl, customization, logoDataUrl]);
 
   const downloadQRCode = () => {
     if (qrCodeUrl) {
@@ -156,9 +267,105 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
 
           <Separator />
 
-          {/* Customization Options */}
+          {/* Logo Upload Section */}
           <div className="space-y-4">
-            <h3 className="font-semibold">Customization</h3>
+            <h3 className="font-semibold">Logo</h3>
+            
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Logo
+                </Button>
+                {logoFile && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={removeLogo}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
+              
+              {logoFile && (
+                <div className="text-sm text-muted-foreground">
+                  {logoFile.name}
+                </div>
+              )}
+
+              {logoDataUrl && (
+                <div>
+                  <Label>Logo Size: {customization.logoSize}%</Label>
+                  <Slider
+                    value={[customization.logoSize]}
+                    onValueChange={([value]) => setCustomization(prev => ({ ...prev, logoSize: value }))}
+                    max={30}
+                    min={10}
+                    step={2}
+                    className="mt-2"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Design Customization */}
+          <div className="space-y-4">
+            <h3 className="font-semibold">Design & Style</h3>
+            
+            <div>
+              <Label>Dot Style</Label>
+              <Select
+                value={customization.dotStyle}
+                onValueChange={(value: 'square' | 'dots' | 'rounded') => 
+                  setCustomization(prev => ({ ...prev, dotStyle: value }))
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="square">Square</SelectItem>
+                  <SelectItem value="dots">Dots</SelectItem>
+                  <SelectItem value="rounded">Rounded</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Corner Style</Label>
+              <Select
+                value={customization.cornerStyle}
+                onValueChange={(value: 'square' | 'dot' | 'rounded') => 
+                  setCustomization(prev => ({ ...prev, cornerStyle: value }))
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="square">Square</SelectItem>
+                  <SelectItem value="dot">Dot</SelectItem>
+                  <SelectItem value="rounded">Rounded</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
