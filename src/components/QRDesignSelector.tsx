@@ -4,42 +4,87 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 
 interface QRDesignSelectorProps {
-  selectedStyle: 'square' | 'dots' | 'rounded';
-  onStyleChange: (style: 'square' | 'dots' | 'rounded') => void;
+  selectedStyle: string;
+  onStyleChange: (style: string) => void;
 }
 
 const QRDesignSelector: React.FC<QRDesignSelectorProps> = ({ selectedStyle, onStyleChange }) => {
   const designs = [
     {
-      id: 'square' as const,
-      name: 'Classic Square',
+      id: 'classic',
+      name: 'Classic',
       preview: (
-        <div className="grid grid-cols-5 gap-1 w-16 h-16">
-          {Array.from({ length: 25 }).map((_, i) => (
-            <div key={i} className={`w-2 h-2 ${Math.random() > 0.5 ? 'bg-black' : 'bg-white'} border border-gray-200`} />
-          ))}
+        <div className="w-16 h-16 border-2 border-gray-300 bg-white p-1">
+          <div className="grid grid-cols-5 gap-0.5 w-full h-full">
+            {Array.from({ length: 25 }).map((_, i) => (
+              <div key={i} className={`w-full h-full ${Math.random() > 0.5 ? 'bg-black' : 'bg-white'}`} />
+            ))}
+          </div>
         </div>
       )
     },
     {
-      id: 'dots' as const,
+      id: 'dots',
       name: 'Dots',
       preview: (
-        <div className="grid grid-cols-5 gap-1 w-16 h-16 items-center justify-items-center">
-          {Array.from({ length: 25 }).map((_, i) => (
-            <div key={i} className={`w-2 h-2 rounded-full ${Math.random() > 0.5 ? 'bg-black' : 'bg-white'}`} />
-          ))}
+        <div className="w-16 h-16 border-2 border-gray-300 bg-white p-1 flex items-center justify-center">
+          <div className="grid grid-cols-5 gap-0.5 w-full h-full items-center justify-items-center">
+            {Array.from({ length: 25 }).map((_, i) => (
+              <div key={i} className={`w-1.5 h-1.5 rounded-full ${Math.random() > 0.5 ? 'bg-black' : 'bg-white'}`} />
+            ))}
+          </div>
         </div>
       )
     },
     {
-      id: 'rounded' as const,
+      id: 'rounded',
       name: 'Rounded',
       preview: (
-        <div className="grid grid-cols-5 gap-1 w-16 h-16">
-          {Array.from({ length: 25 }).map((_, i) => (
-            <div key={i} className={`w-2 h-2 rounded ${Math.random() > 0.5 ? 'bg-black' : 'bg-white'}`} />
-          ))}
+        <div className="w-16 h-16 border-2 border-gray-300 bg-white p-1">
+          <div className="grid grid-cols-5 gap-0.5 w-full h-full">
+            {Array.from({ length: 25 }).map((_, i) => (
+              <div key={i} className={`w-full h-full rounded ${Math.random() > 0.5 ? 'bg-black' : 'bg-white'}`} />
+            ))}
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'gradient',
+      name: 'Gradient',
+      preview: (
+        <div className="w-16 h-16 border-2 border-gray-300 bg-gradient-to-br from-blue-500 to-purple-600 p-1">
+          <div className="grid grid-cols-5 gap-0.5 w-full h-full">
+            {Array.from({ length: 25 }).map((_, i) => (
+              <div key={i} className={`w-full h-full rounded-sm ${Math.random() > 0.5 ? 'bg-white' : 'bg-transparent'}`} />
+            ))}
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'circular',
+      name: 'Circular',
+      preview: (
+        <div className="w-16 h-16 border-2 border-gray-300 bg-white rounded-full p-2 flex items-center justify-center">
+          <div className="grid grid-cols-4 gap-0.5 w-full h-full items-center justify-items-center">
+            {Array.from({ length: 16 }).map((_, i) => (
+              <div key={i} className={`w-1 h-1 rounded-full ${Math.random() > 0.5 ? 'bg-blue-600' : 'bg-transparent'}`} />
+            ))}
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'artistic',
+      name: 'Artistic',
+      preview: (
+        <div className="w-16 h-16 border-2 border-gray-300 bg-gradient-to-tr from-green-400 to-blue-500 p-1">
+          <div className="grid grid-cols-5 gap-0.5 w-full h-full">
+            {Array.from({ length: 25 }).map((_, i) => (
+              <div key={i} className={`w-full h-full ${Math.random() > 0.6 ? 'bg-white' : 'bg-transparent'} ${i % 3 === 0 ? 'rounded-full' : 'rounded'}`} />
+            ))}
+          </div>
         </div>
       )
     }
@@ -47,12 +92,12 @@ const QRDesignSelector: React.FC<QRDesignSelectorProps> = ({ selectedStyle, onSt
 
   return (
     <div className="space-y-3">
-      <Label>QR Code Design</Label>
+      <Label>Select QR Code Template</Label>
       <div className="grid grid-cols-3 gap-3">
         {designs.map((design) => (
           <Card
             key={design.id}
-            className={`p-4 cursor-pointer transition-all hover:shadow-md ${
+            className={`p-3 cursor-pointer transition-all hover:shadow-md ${
               selectedStyle === design.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
             }`}
             onClick={() => onStyleChange(design.id)}

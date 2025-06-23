@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Upload, X, Eye, Copy } from 'lucide-react';
+import { Upload, X, Eye, Copy, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import QRDesignSelector from './QRDesignSelector';
 import BrandedUrlGenerator from './BrandedUrlGenerator';
@@ -31,7 +30,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
     errorCorrectionLevel: 'M' as 'L' | 'M' | 'Q' | 'H',
     margin: 4,
     width: 256,
-    dotStyle: 'square' as 'square' | 'dots' | 'rounded',
+    dotStyle: 'classic',
     logoSize: 20
   });
   
@@ -49,34 +48,116 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
     return `${baseUrl}/redirect?${params.toString()}`;
   };
 
-  const applyCustomStyles = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+  const applyDesignStyle = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const moduleSize = canvas.width / 25;
 
-    if (customization.dotStyle === 'dots') {
-      for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
-        for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
-          const idx = (y * canvas.width + x) * 4;
-          if (imageData.data[idx] === 0) {
-            ctx.fillStyle = customization.foregroundColor;
-            ctx.beginPath();
-            ctx.arc(x + moduleSize/2, y + moduleSize/2, moduleSize/3, 0, 2 * Math.PI);
-            ctx.fill();
+    // Clear the canvas first
+    ctx.fillStyle = customization.backgroundColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    switch (customization.dotStyle) {
+      case 'dots':
+        for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
+          for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
+            const idx = (y * canvas.width + x) * 4;
+            if (imageData.data[idx] === 0) {
+              ctx.fillStyle = customization.foregroundColor;
+              ctx.beginPath();
+              ctx.arc(x + moduleSize/2, y + moduleSize/2, moduleSize/3, 0, 2 * Math.PI);
+              ctx.fill();
+            }
           }
         }
-      }
-    } else if (customization.dotStyle === 'rounded') {
-      for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
-        for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
-          const idx = (y * canvas.width + x) * 4;
-          if (imageData.data[idx] === 0) {
-            ctx.fillStyle = customization.foregroundColor;
-            ctx.beginPath();
-            ctx.roundRect(x, y, moduleSize * 0.8, moduleSize * 0.8, moduleSize * 0.2);
-            ctx.fill();
+        break;
+      case 'rounded':
+        for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
+          for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
+            const idx = (y * canvas.width + x) * 4;
+            if (imageData.data[idx] === 0) {
+              ctx.fillStyle = customization.foregroundColor;
+              ctx.beginPath();
+              ctx.roundRect(x, y, moduleSize * 0.8, moduleSize * 0.8, moduleSize * 0.2);
+              ctx.fill();
+            }
           }
         }
-      }
+        break;
+      case 'gradient':
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, '#3B82F6');
+        gradient.addColorStop(1, '#8B5CF6');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
+          for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
+            const idx = (y * canvas.width + x) * 4;
+            if (imageData.data[idx] === 0) {
+              ctx.fillStyle = 'white';
+              ctx.fillRect(x, y, moduleSize * 0.9, moduleSize * 0.9);
+            }
+          }
+        }
+        break;
+      case 'circular':
+        // Create circular background
+        ctx.beginPath();
+        ctx.arc(canvas.width/2, canvas.height/2, canvas.width/2 - 10, 0, 2 * Math.PI);
+        ctx.fillStyle = customization.backgroundColor;
+        ctx.fill();
+        ctx.strokeStyle = '#E5E7EB';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
+          for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
+            const idx = (y * canvas.width + x) * 4;
+            const distFromCenter = Math.sqrt(Math.pow(x - canvas.width/2, 2) + Math.pow(y - canvas.height/2, 2));
+            if (imageData.data[idx] === 0 && distFromCenter < canvas.width/2 - 20) {
+              ctx.fillStyle = '#2563EB';
+              ctx.beginPath();
+              ctx.arc(x + moduleSize/2, y + moduleSize/2, moduleSize/4, 0, 2 * Math.PI);
+              ctx.fill();
+            }
+          }
+        }
+        break;
+      case 'artistic':
+        const artisticGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        artisticGradient.addColorStop(0, '#10B981');
+        artisticGradient.addColorStop(1, '#3B82F6');
+        ctx.fillStyle = artisticGradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
+          for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
+            const idx = (y * canvas.width + x) * 4;
+            if (imageData.data[idx] === 0) {
+              ctx.fillStyle = 'white';
+              if ((x + y) % 3 === 0) {
+                ctx.beginPath();
+                ctx.arc(x + moduleSize/2, y + moduleSize/2, moduleSize/3, 0, 2 * Math.PI);
+                ctx.fill();
+              } else {
+                ctx.beginPath();
+                ctx.roundRect(x, y, moduleSize * 0.8, moduleSize * 0.8, moduleSize * 0.3);
+                ctx.fill();
+              }
+            }
+          }
+        }
+        break;
+      default: // classic
+        for (let y = 0; y < canvas.height; y += Math.floor(moduleSize)) {
+          for (let x = 0; x < canvas.width; x += Math.floor(moduleSize)) {
+            const idx = (y * canvas.width + x) * 4;
+            if (imageData.data[idx] === 0) {
+              ctx.fillStyle = customization.foregroundColor;
+              ctx.fillRect(x, y, moduleSize, moduleSize);
+            }
+          }
+        }
     }
   };
 
@@ -108,23 +189,23 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
       const canvas = canvasRef.current;
       
       if (canvas) {
+        // First generate the basic QR code
         await QRCode.toCanvas(canvas, redirectUrl, {
           errorCorrectionLevel: customization.errorCorrectionLevel,
           type: 'image/png',
           quality: 0.92,
           margin: customization.margin,
           color: {
-            dark: customization.foregroundColor,
-            light: customization.backgroundColor,
+            dark: '#000000',
+            light: '#ffffff',
           },
           width: customization.width,
         });
 
         const ctx = canvas.getContext('2d');
-        if (ctx && customization.dotStyle !== 'square') {
-          ctx.fillStyle = customization.backgroundColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          applyCustomStyles(ctx, canvas);
+        if (ctx) {
+          // Apply custom design styles
+          applyDesignStyle(ctx, canvas);
         }
 
         if (logoDataUrl) {
@@ -134,6 +215,11 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
         const dataUrl = canvas.toDataURL();
         setQrCodeUrl(dataUrl);
         onQRGenerated(redirectUrl);
+        
+        toast({
+          title: "Success!",
+          description: "QR code generated successfully with your selected design.",
+        });
       }
     } catch (error) {
       console.error('Error generating QR code:', error);
@@ -249,6 +335,14 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
 
             <Separator />
 
+            {/* QR Design Selection */}
+            <QRDesignSelector
+              selectedStyle={customization.dotStyle}
+              onStyleChange={(style) => setCustomization(prev => ({ ...prev, dotStyle: style }))}
+            />
+
+            <Separator />
+
             {/* Logo Upload Section */}
             <div className="space-y-4">
               <h3 className="font-semibold">Logo</h3>
@@ -307,58 +401,53 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
 
             <Separator />
 
-            {/* QR Design Selection */}
-            <QRDesignSelector
-              selectedStyle={customization.dotStyle}
-              onStyleChange={(style) => setCustomization(prev => ({ ...prev, dotStyle: style }))}
-            />
-
-            <Separator />
-
-            {/* Color Customization */}
-            <div className="space-y-4">
-              <h3 className="font-semibold">Colors</h3>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="fg-color">Foreground Color</Label>
-                  <div className="flex gap-2 mt-1">
-                    <input
-                      type="color"
-                      id="fg-color"
-                      value={customization.foregroundColor}
-                      onChange={(e) => setCustomization(prev => ({ ...prev, foregroundColor: e.target.value }))}
-                      className="w-12 h-10 rounded border cursor-pointer"
-                    />
-                    <Input
-                      value={customization.foregroundColor}
-                      onChange={(e) => setCustomization(prev => ({ ...prev, foregroundColor: e.target.value }))}
-                      className="flex-1"
-                    />
+            {/* Color Customization - Only show for classic and some styles */}
+            {(customization.dotStyle === 'classic' || customization.dotStyle === 'dots' || customization.dotStyle === 'rounded') && (
+              <>
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Colors</h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="fg-color">Foreground Color</Label>
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="fg-color"
+                          value={customization.foregroundColor}
+                          onChange={(e) => setCustomization(prev => ({ ...prev, foregroundColor: e.target.value }))}
+                          className="w-12 h-10 rounded border cursor-pointer"
+                        />
+                        <Input
+                          value={customization.foregroundColor}
+                          onChange={(e) => setCustomization(prev => ({ ...prev, foregroundColor: e.target.value }))}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="bg-color">Background Color</Label>
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="bg-color"
+                          value={customization.backgroundColor}
+                          onChange={(e) => setCustomization(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                          className="w-12 h-10 rounded border cursor-pointer"
+                        />
+                        <Input
+                          value={customization.backgroundColor}
+                          onChange={(e) => setCustomization(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-                
-                <div>
-                  <Label htmlFor="bg-color">Background Color</Label>
-                  <div className="flex gap-2 mt-1">
-                    <input
-                      type="color"
-                      id="bg-color"
-                      value={customization.backgroundColor}
-                      onChange={(e) => setCustomization(prev => ({ ...prev, backgroundColor: e.target.value }))}
-                      className="w-12 h-10 rounded border cursor-pointer"
-                    />
-                    <Input
-                      value={customization.backgroundColor}
-                      onChange={(e) => setCustomization(prev => ({ ...prev, backgroundColor: e.target.value }))}
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
+                <Separator />
+              </>
+            )}
 
             {/* Advanced Settings */}
             <div className="space-y-4">
@@ -408,6 +497,18 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
                 />
               </div>
             </div>
+
+            <Separator />
+
+            {/* Generate Button */}
+            <Button 
+              onClick={generateQRCode} 
+              className="w-full flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              size="lg"
+            >
+              <Zap className="h-5 w-5" />
+              Generate QR Code
+            </Button>
           </CardContent>
         </Card>
 
@@ -429,16 +530,18 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ onQRGenerated }) => {
               />
             </div>
             
-            <div className="flex gap-2 justify-center flex-wrap">
-              <DownloadOptions qrCodeUrl={qrCodeUrl} canvasRef={canvasRef} />
-              <Button variant="outline" onClick={copyRedirectUrl} className="flex items-center gap-2">
-                <Copy className="h-4 w-4" />
-                Copy URL
-              </Button>
-            </div>
+            {qrCodeUrl && (
+              <div className="flex gap-2 justify-center flex-wrap">
+                <DownloadOptions qrCodeUrl={qrCodeUrl} canvasRef={canvasRef} />
+                <Button variant="outline" onClick={copyRedirectUrl} className="flex items-center gap-2">
+                  <Copy className="h-4 w-4" />
+                  Copy URL
+                </Button>
+              </div>
+            )}
 
             <div className="text-sm text-muted-foreground">
-              Scan this QR code to test the redirect functionality
+              {qrCodeUrl ? 'Scan this QR code to test the redirect functionality' : 'Click "Generate QR Code" to create your QR code'}
             </div>
           </CardContent>
         </Card>
